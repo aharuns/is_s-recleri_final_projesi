@@ -82,29 +82,75 @@ function createIndicatorDots() {
         
         indicatorDots.appendChild(dot);
     });
+    
+    // Indicator track yüksekliğini ayarla
+    updateIndicatorTrackHeight();
+}
+
+// Indicator track yüksekliğini dinamik olarak ayarla
+function updateIndicatorTrackHeight() {
+    const indicatorTrack = document.querySelector('.indicator-track');
+    if (!indicatorTrack) return;
+    
+    // Nokta sayısına göre minimum yükseklik hesapla
+    const dotCount = pageData.length;
+    const minHeight = Math.max(400, dotCount * 40); // Her nokta için ~40px
+    
+    // Viewport yüksekliğine göre maksimum yükseklik
+    const maxHeight = window.innerHeight * 0.8; // Viewport'un %80'i
+    
+    // Final yükseklik
+    const finalHeight = Math.min(minHeight, maxHeight);
+    
+    indicatorTrack.style.height = finalHeight + 'px';
+    indicatorTrack.style.minHeight = finalHeight + 'px';
 }
 
 // Sayfa göstergesini güncelle
 function updateVerticalIndicator() {
-    const sections = document.querySelectorAll('.section, .hero');
-    const scrollPosition = window.pageYOffset;
+    const scrollPosition = window.pageYOffset || window.scrollY;
     const windowHeight = window.innerHeight;
     const documentHeight = document.documentElement.scrollHeight;
     
-    let currentSection = 'home';
+    let currentSectionId = 'home';
     let currentIndex = 0;
     
-    // Hangi section'da olduğumuzu bul
-    sections.forEach((section, index) => {
-        const sectionTop = section.offsetTop - 100;
-        const sectionHeight = section.clientHeight;
-        if (scrollPosition >= sectionTop && scrollPosition < sectionTop + sectionHeight) {
-            currentSection = section.getAttribute('id') || 'home';
+    // Sayfa sonuna yaklaşıldığında kontrol (daha geniş bir eşik)
+    const isNearBottom = scrollPosition + windowHeight >= documentHeight - 100;
+    
+    // pageData'daki her sayfa için kontrol et
+    for (let index = 0; index < pageData.length; index++) {
+        const page = pageData[index];
+        const section = document.getElementById(page.id);
+        if (!section) continue;
+        
+        // Section'ın gerçek pozisyonunu hesapla
+        const rect = section.getBoundingClientRect();
+        const sectionTop = scrollPosition + rect.top;
+        const sectionHeight = rect.height;
+        const sectionBottom = sectionTop + sectionHeight;
+        
+        // Son sayfa için özel kontrol
+        const isLastPage = index === pageData.length - 1;
+        
+        if (isLastPage && isNearBottom) {
+            // Son sayfadayız
+            currentSectionId = page.id;
+            currentIndex = index;
+            break; // Son sayfadayız, döngüden çık
+        } else if (scrollPosition + windowHeight / 2 >= sectionTop && scrollPosition + windowHeight / 2 < sectionBottom) {
+            // Viewport'un ortası section içindeyse
+            currentSectionId = page.id;
+            currentIndex = index;
+            // Devam et, daha sonraki section'ları da kontrol et (en son eşleşen kazanır)
+        } else if (scrollPosition >= sectionTop - 100 && scrollPosition < sectionBottom) {
+            // Normal sayfa kontrolü (offset ile)
+            currentSectionId = page.id;
             currentIndex = index;
         }
-    });
+    }
     
-    // Aktif noktayı güncelle
+    // Aktif noktayı güncelle - pageData index'ine göre
     const dots = document.querySelectorAll('.indicator-dot');
     dots.forEach((dot, index) => {
         if (index === currentIndex) {
@@ -114,10 +160,20 @@ function updateVerticalIndicator() {
         }
     });
     
-    // Progress line'ı güncelle
+    // Progress line'ı güncelle - son sayfalarda da doğru çalışması için
     if (progressLine && documentHeight > windowHeight) {
         const totalScrollable = documentHeight - windowHeight;
-        const progress = (scrollPosition / totalScrollable) * 100;
+        let progress = 0;
+        
+        if (totalScrollable > 0) {
+            progress = (scrollPosition / totalScrollable) * 100;
+        }
+        
+        // Sayfa sonuna yaklaşıldığında %100'e ulaşmasını sağla
+        if (scrollPosition + windowHeight >= documentHeight - 10) {
+            progress = 100;
+        }
+        
         progressLine.style.height = Math.min(Math.max(progress, 0), 100) + '%';
     }
 }
@@ -126,6 +182,12 @@ function updateVerticalIndicator() {
 document.addEventListener('DOMContentLoaded', () => {
     createIndicatorDots();
     updateVerticalIndicator();
+    
+    // Pencere boyutu değiştiğinde indicator track yüksekliğini güncelle
+    window.addEventListener('resize', () => {
+        updateIndicatorTrackHeight();
+        updateVerticalIndicator();
+    });
 });
 
 // Scroll event'ini throttle ile optimize et
